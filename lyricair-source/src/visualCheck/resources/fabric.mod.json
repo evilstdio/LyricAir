@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "lyricair_visualcheck",
+  "version": "1.0.0",
+  "name": "LyricAir visual integration fixture",
+  "environment": "client",
+  "entrypoints": { "client": ["dev.lyricair.visualcheck.VisualCheckClient"] },
+  "depends": { "lyricair": "*", "fabric-api": "*", "minecraft": "1.21.1" }
+}

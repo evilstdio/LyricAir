@@ -1,0 +1,63 @@
+// Small, explicit source adapters keep Spotify, configuration and UI behavior shared.
+ext.adaptSource = { String path, String source, String mc, int minor ->
+    source = source.replace('"0.2.1"', '"0.3.0"')
+    source = source.replace('import org.lwjgl.glfw.GLFW;', 'import com.mojang.blaze3d.platform.InputConstants;')
+    source = source.replace('GLFW.GLFW_KEY_ENTER', 'InputConstants.KEY_RETURN').replace('GLFW.GLFW_KEY_KP_ENTER', 'InputConstants.KEY_NUMPADENTER').replace('GLFW.GLFW_KEY_', 'InputConstants.KEY_')
+    if (minor >= 5) source = source.replace('new DynamicTexture(image)', 'new DynamicTexture(() -> "LyricAir UI", image)')
+    if (minor >= 6) {
+        source = source.replace('import net.minecraft.client.renderer.RenderType;', 'import net.minecraft.client.renderer.RenderPipelines;').replace('RenderType::guiTextured', 'RenderPipelines.GUI_TEXTURED')
+        source = source.replace('.pushPose()', '.pushMatrix()').replace('.popPose()', '.popMatrix()')
+        source = source.replace('translate(layout.x(), layout.y(), 0)', 'translate((float) layout.x(), (float) layout.y())').replace('translate(x, y, 0)', 'translate(x, y)')
+        source = source.replace('scale((float) layout.scale(), (float) layout.scale(), 1)', 'scale((float) layout.scale(), (float) layout.scale())').replace('scale(size / 11, size / 11, 1)', 'scale(size / 11, size / 11)')
+        source = source.replace('context.flush();', '')
+    }
+    if (minor >= 9) {
+        source = source.replace('style.withFont(FONT)', 'style.withFont(new net.minecraft.network.chat.FontDescription.Resource(FONT))')
+        if (!path.contains('Compatible')) source = source.replace('extends Screen {', 'extends CompatibleScreen {').replace('extends AbstractWidget {', 'extends CompatibleWidget {').replace('extends EditBox {', 'extends CompatibleEditBox {')
+        source = source.replace('Screen.hasShiftDown()', 'CompatibleScreen.shiftDown()')
+        source = source.replace('"key.categories.lyricair"', 'KeyMapping.Category.register(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("lyricair", "controls"))')
+        // The category must be registered once, then reused by both shortcuts.
+        if (path.endsWith('LyricAirClient.java')) {
+            source = source.replace('KeyMapping settings =', 'var category = KeyMapping.Category.register(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("lyricair", "controls"));\n        KeyMapping settings =')
+            source = source.replace('KeyMapping.Category.register(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("lyricair", "controls")))', 'category)')
+        }
+    }
+    if (minor >= 11) {
+        source = source.replace('ResourceLocation', 'Identifier')
+        source = source.replace('style.withFont(FONT)', 'style.withFont(new net.minecraft.network.chat.FontDescription.Resource(FONT))')
+        source = source.replace('camera.getPosition()', 'camera.position()').replace('camera.getYRot()', 'camera.yRot()').replace('camera.getXRot()', 'camera.xRot()')
+        source = source.replace('texture.setFilter(true, false);', '')
+        if (mc == '1.21.11' && path.endsWith('OverlayEditorScreen.java')) source = source.replace('void renderWidget(', 'void renderContents(')
+    }
+    if (mc.startsWith('26.')) {
+        source = source.replace('GuiGraphics', 'GuiGraphicsExtractor').replace('renderBackground(', 'extractBackground(').replace('renderWidget(', 'extractWidgetRenderState(')
+        if (path.contains('/ui/') || path.contains('\\ui\\')) source = source.replace('void render(', 'void extractRenderState(').replace('super.render(', 'super.extractRenderState(')
+        source = source.replace('ResourceLocation', 'Identifier')
+        source = source.replace('net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper', 'net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper').replace('KeyBindingHelper.registerKeyBinding', 'KeyMappingHelper.registerKeyMapping')
+        source = source.replace('ClientCommandManager.literal', 'ClientCommands.literal')
+        source = source.replace('import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;', 'import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;')
+        source = source.replace('HudRenderCallback.EVENT.register(hud::render)', 'HudElementRegistry.addLast(net.minecraft.resources.Identifier.fromNamespaceAndPath("lyricair", "lyrics"), hud::render)')
+        source = source.replace('style.withFont(FONT)', 'style.withFont(new net.minecraft.network.chat.FontDescription.Resource(FONT))')
+        source = source.replace('camera.getPosition()', 'camera.position()').replace('camera.getYRot()', 'camera.yRot()').replace('camera.getXRot()', 'camera.xRot()')
+        source = source.replace('texture.setFilter(true, false);', '')
+        source = source.replace('context.drawString(font(), text(value),', 'context.text(font(), text(value).getVisualOrderText(),')
+        source = source.replace('client.player.displayClientMessage(', 'client.gui.setOverlayMessage(')
+        source = source.replace('new CharacterEvent(character, modifiers)', 'new CharacterEvent(character)')
+        if (path.endsWith('OverlayEditorScreen.java')) source = source.replace('void extractWidgetRenderState(', 'void extractContents(')
+    }
+    if (mc == '26.2' || mc == '26.3') {
+        source = source.replace('.setScreen(', '.setScreenAndShow(').replace('client.screen', 'client.gui.screen()').replace('mc.screen', 'mc.gui.screen()')
+        source = source.replace('client.options.hideGui', 'client.gui.hud.isHidden()')
+        source = source.replace('client.gui.setOverlayMessage(', 'client.gui.hud.setOverlayMessage(')
+        source = source.replace('EntityType.TEXT_DISPLAY', 'net.minecraft.world.entity.EntityTypes.TEXT_DISPLAY')
+        source = source.replace('.getMainCamera()', '.mainCamera()')
+    }
+    if (mc == '26.3') {
+        source = source.replace('InputConstants.Type.KEYSYM', 'InputConstants.Type.KEYBOARD')
+        source = source.replace('event.scancode()', 'event.keycode()').replace('new CharacterEvent(character, modifiers)', 'new CharacterEvent(character)')
+        // SDL numbers mouse buttons differently; always use the engine constants.
+        source = source.replace('button == 0', 'button == InputConstants.MOUSE_BUTTON_LEFT').replace('button != 0', 'button != InputConstants.MOUSE_BUTTON_LEFT')
+        if (path.endsWith('OverlayEditorScreen.java')) source = source.replace('package dev.lyricair.ui;', 'package dev.lyricair.ui;\nimport com.mojang.blaze3d.platform.InputConstants;').replace('void extractWidgetRenderState(', 'void extractContents(')
+    }
+    return source
+}

@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "dev.lyricair.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": ["DisplayAccess", "TextDisplayAccess"],
+  "injectors": {"defaultRequire": 1}
+}

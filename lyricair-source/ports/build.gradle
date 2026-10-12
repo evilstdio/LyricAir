@@ -1,0 +1,154 @@
+import groovy.json.JsonSlurper
+
+plugins {
+    id 'net.fabricmc.fabric-loom-remap' version '1.17.11' apply false
+    id 'net.fabricmc.fabric-loom' version '1.17.11' apply false
+}
+def mc = (findProperty('mc') ?: '1.21.2').toString()
+def target = new JsonSlurper().parse(file('versions.json')).find { it.minecraft == mc }
+if (target == null) throw new GradleException("No released target configured for ${mc}")
+def modern = mc.startsWith('26.')
+def minor = modern ? 100 : mc.tokenize('.')[2].toInteger()
+apply from: 'adapt.gradle'
+apply plugin: modern ? 'net.fabricmc.fabric-loom' : 'net.fabricmc.fabric-loom-remap'
+version = project.mod_version
+group = 'dev.lyricair'
+layout.buildDirectory = file("build/${mc}")
+base { archivesName = 'lyricair' }
+repositories { mavenCentral() }
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    minecraft "com.mojang:minecraft:${mc}"
+    if (!modern) mappings loom.officialMojangMappings()
+    if (modern) {
+        implementation "net.fabricmc:fabric-loader:${target.loader}"
+        implementation "net.fabricmc.fabric-api:fabric-api:${target.fabricApi}"
+    } else {
+        modImplementation "net.fabricmc:fabric-loader:${target.loader}"
+        modImplementation "net.fabricmc.fabric-api:fabric-api:${target.fabricApi}"
+    }
+}
+def generated = layout.buildDirectory.dir('generated/java')
+tasks.register('generateSources') {
+    inputs.dir('baseline')
+    inputs.dir('common')
+    inputs.dir('input')
+    inputs.file('adapt.gradle')
+    inputs.file('build.gradle')
+    inputs.property('minecraft', mc)
+    outputs.dir(generated)
+    doLast {
+        def sources = [:]
+        ['baseline', 'common'].each { folder ->
+            fileTree(folder).matching { include '**/*.java' }.each { source -> sources[file(folder).toPath().relativize(source.toPath()).toString()] = source.getText('UTF-8') }
+        }
+        if (minor >= 9) fileTree('input').matching { include '**/*.java' }.each { input -> sources[file('input').toPath().relativize(input.toPath()).toString()] = input.getText('UTF-8') }
+        sources.each { path, source ->
+            if (path.endsWith('LyricController.java')) source = source.replace('new DustParticleOptions(color, 0.7f)', 'new DustParticleOptions(config.color, 0.7f)')
+            if (path.endsWith('LyricAirClient.java')) source = source.replace('import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;', '')
+                    .replace('WorldRenderEvents.LAST.register(renderer::render);', 'ClientTickEvents.END_CLIENT_TICK.register(mc -> renderer.tick());')
+            def output = new File(generated.get().asFile, path)
+            output.parentFile.mkdirs(); output.setText(adaptSource(path, source, mc, minor), 'UTF-8')
+        }
+    }
+}
+sourceSets.main.java.setSrcDirs([generated])
+sourceSets.main.resources.setSrcDirs(['../src/main/resources', 'resources'])
+def generatedTests = layout.buildDirectory.dir('generated/tests')
+tasks.register('generateTests') {
+    inputs.dir('../src/test/java'); outputs.dir(generatedTests)
+    doLast {
+        fileTree('../src/test/java').matching { include '**/*.java' }.each { input ->
+            def output = new File(generatedTests.get().asFile, file('../src/test/java').toPath().relativize(input.toPath()).toString())
+            output.parentFile.mkdirs()
+            output.text = input.text.replace('net.minecraft.util.math.Vec3d', 'net.minecraft.world.phys.Vec3').replace('Vec3d', 'Vec3').replace('.dotProduct(', '.dot(').replace('.crossProduct(', '.cross(')
+        }
+    }
+}
+sourceSets.test.java.setSrcDirs([generatedTests])
+tasks.named('compileTestJava') { dependsOn 'generateTests', 'generateSources' }
+tasks.named('test') { useJUnitPlatform() }
+tasks.named('compileJava') { dependsOn 'generateSources' }
+processResources {
+    inputs.property('version', project.version)
+    inputs.property('minecraft', mc)
+    inputs.property('keyCategoryTranslation', true)
+    filesMatching('assets/lyricair/lang/en_us.json') {
+        filter { line -> line.replace('"key.categories.lyricair": "LyricAir",', '"key.categories.lyricair": "LyricAir", "key.category.lyricair.controls": "LyricAir",') }
+    }
+    filesMatching('fabric.mod.json') {
+        expand version: project.version
+        filter { line -> line.replace('"minecraft": "1.21.1"', '"minecraft": "' + mc + '"').replace('"java": ">=21"', '"java": ">=' + target.java + '"').replace('">=0.16.14"', '">=' + target.loader + '"').replace('"environment": "client",', '"environment": "client", "mixins": ["lyricair.mixins.json"],') }
+    }
+}
+tasks.withType(JavaCompile).configureEach { options.release = target.java as int; options.compilerArgs += ['-Xmaxerrs', '500'] }
+java { sourceCompatibility = JavaVersion.toVersion(target.java); targetCompatibility = JavaVersion.toVersion(target.java); withSourcesJar() }
+tasks.named('sourcesJar') { dependsOn 'generateSources' }
+tasks.withType(AbstractArchiveTask).configureEach { archiveVersion = "${project.version}-mc${mc}" }
+jar { from('../LICENSE') }
+loom { runs { client { client(); runDir ".run/${mc}" } } }
+
+if (project.hasProperty('visualCheck')) {
+    def generatedCheck = layout.buildDirectory.dir('generated/check')
+    tasks.register('generateCheckSources') {
+        inputs.dir('check-baseline'); inputs.file('adapt.gradle'); inputs.file('build.gradle'); inputs.property('minecraft', mc); outputs.dir(generatedCheck)
+        doLast {
+            fileTree('check-baseline').matching { include '**/*.java' }.each { input ->
+                def output = new File(generatedCheck.get().asFile, file('check-baseline').toPath().relativize(input.toPath()).toString())
+                output.parentFile.mkdirs()
+                def source = input.getText('UTF-8').replace('getParent().resolve(".tools/cover-pipeline-check.png")', 'getParent().getParent().getParent().resolve(".tools/cover-pipeline-check.png")')
+                source = adaptSource('VisualCheckClient.java', source, mc, minor)
+                if (minor >= 6) source = source.replace('new GuiGraphics(client, client.renderBuffers().bufferSource())', 'new GuiGraphics(client, new net.minecraft.client.gui.render.state.GuiRenderState())').replace('client.getMainRenderTarget(), message', 'client.getMainRenderTarget(), 1, message')
+                if (minor >= 9) {
+                    if (minor >= 11) source = source.replace('new GuiGraphics(client, new net.minecraft.client.gui.render.state.GuiRenderState())', 'new GuiGraphics(client, new net.minecraft.client.gui.render.state.GuiRenderState(), 0, 0)')
+                    source = source.replace('Screen screen', 'dev.lyricair.ui.CompatibleScreen screen').replace('Screen menu = client.screen', 'dev.lyricair.ui.CompatibleScreen menu = (dev.lyricair.ui.CompatibleScreen) client.screen')
+                    source = source.replace('click(client.screen,', 'click((dev.lyricair.ui.CompatibleScreen) client.screen,').replace('drag(client.screen,', 'drag((dev.lyricair.ui.CompatibleScreen) client.screen,')
+                    source = source.replace('client.screen.charTyped(', '((dev.lyricair.ui.CompatibleScreen) client.screen).charTyped(').replace('client.screen.keyPressed(', '((dev.lyricair.ui.CompatibleScreen) client.screen).keyPressed(')
+                    source = source.replace('client.screen.mouseClicked(', '((dev.lyricair.ui.CompatibleScreen) client.screen).mouseClicked(').replace('client.screen.mouseDragged(', '((dev.lyricair.ui.CompatibleScreen) client.screen).mouseDragged(').replace('client.screen.mouseReleased(', '((dev.lyricair.ui.CompatibleScreen) client.screen).mouseReleased(')
+                }
+                if (modern) {
+                    source = source.replace('ClientCommandManager', 'ClientCommands').replace('new GuiGraphicsExtractor(client, client.renderBuffers().bufferSource())', 'new GuiGraphicsExtractor(client, new net.minecraft.client.renderer.state.gui.GuiRenderState(), 0, 0)').replace('menu.render(', 'menu.extractRenderState(')
+                    source = source.replace('method = "render"', 'method = "extractRenderState"')
+                }
+                if (mc == '26.2' || mc == '26.3') {
+                    source = source.replace('client.gui.getChat()', 'client.gui.hud.getChat()').replace('client.gui.hud.isHidden() = false;', 'if (client.gui.hud.isHidden()) client.gui.hud.toggle();')
+                    source = source.replace('client.getMainRenderTarget()', 'client.gameRenderer.mainRenderTarget()')
+                    source = source.replace('click(client.gui.screen(),', 'click((dev.lyricair.ui.CompatibleScreen) client.gui.screen(),').replace('drag(client.gui.screen(),', 'drag((dev.lyricair.ui.CompatibleScreen) client.gui.screen(),')
+                    source = source.replace('client.gui.screen().charTyped(', '((dev.lyricair.ui.CompatibleScreen) client.gui.screen()).charTyped(').replace('client.gui.screen().keyPressed(', '((dev.lyricair.ui.CompatibleScreen) client.gui.screen()).keyPressed(')
+                    source = source.replace('client.gui.screen().mouseClicked(', '((dev.lyricair.ui.CompatibleScreen) client.gui.screen()).mouseClicked(').replace('client.gui.screen().mouseDragged(', '((dev.lyricair.ui.CompatibleScreen) client.gui.screen()).mouseDragged(').replace('client.gui.screen().mouseReleased(', '((dev.lyricair.ui.CompatibleScreen) client.gui.screen()).mouseReleased(')
+                    source = source.replace('Screen menu = client.gui.screen()', 'dev.lyricair.ui.CompatibleScreen menu = (dev.lyricair.ui.CompatibleScreen) client.gui.screen()')
+                    if (mc == '26.3') source = source.replace('mouseClicked(30, 65, 0)', 'mouseClicked(30, 65, InputConstants.MOUSE_BUTTON_LEFT)').replace('mouseReleased(185, 170, 0)', 'mouseReleased(185, 170, InputConstants.MOUSE_BUTTON_LEFT)').replace('mouseDragged(185, 170, 0,', 'mouseDragged(185, 170, InputConstants.MOUSE_BUTTON_LEFT,').replace('mouseClicked(px, py, 0)', 'mouseClicked(px, py, InputConstants.MOUSE_BUTTON_LEFT)').replace('mouseReleased(px, py, 0)', 'mouseReleased(px, py, InputConstants.MOUSE_BUTTON_LEFT)').replace('scale, 0)', 'scale, InputConstants.MOUSE_BUTTON_LEFT)').replace('scale, 0, (targetX', 'scale, InputConstants.MOUSE_BUTTON_LEFT, (targetX')
+                }
+                output.setText(source, 'UTF-8')
+            }
+        }
+    }
+    sourceSets {
+        visualCheck {
+            java.srcDirs = [generatedCheck]
+            resources.srcDirs = ['check-resources']
+            compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+            runtimeClasspath += sourceSets.main.runtimeClasspath
+        }
+    }
+    tasks.named('compileVisualCheckJava') { dependsOn 'generateCheckSources', 'classes' }
+    tasks.named('processVisualCheckResources') { inputs.property('minecraft', mc); filesMatching('fabric.mod.json') { filter { line -> line.replace('1.21.1', mc) } } }
+    loom {
+        mods { lyricair { sourceSet sourceSets.main }; lyricair_visualcheck { sourceSet sourceSets.visualCheck } }
+        runs { visualCheck { client(); source sourceSets.visualCheck; runDir ".run/${mc}"; programArgs '--quickPlaySingleplayer', 'LyricAirCheck' } }
+    }
+    tasks.named('runVisualCheck') {
+        def runtimeJdk = file('../.tools/java').listFiles()?.find { it.name.startsWith("jdk-${target.java}.") }
+        if (runtimeJdk != null) executable = new File(runtimeJdk, 'bin/java.exe').absolutePath
+        doFirst {
+            def profile = file(".run/${mc}")
+            def config = new File(profile, 'config/lyricair.json'); config.parentFile.mkdirs(); config.text = '{}'
+            def options = new File(profile, 'options.txt')
+            if (!options.exists()) options.text = 'onboardAccessibility:false\ntutorialStep:none\nrenderDistance:4\nsimulationDistance:5\nguiScale:2\nsoundCategory_master:0.0\n'
+            if (!new File(profile, 'saves/LyricAirCheck/level.dat').exists()) {
+                copy { from '../.visual-check-run/saves/LyricAirCheck'; into new File(profile, 'saves/LyricAirCheck') }
+            }
+        }
+    }
+}

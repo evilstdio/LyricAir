@@ -1,0 +1,70 @@
+plugins {
+    id 'fabric-loom' version '1.9.2'
+}
+
+version = project.mod_version
+group = project.maven_group
+base { archivesName = project.archives_base_name }
+
+repositories { mavenCentral() }
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    // Match Minecraft 1.21.1's LWJGL ABI; ship NanoVG and its platform libraries.
+    implementation include('org.lwjgl:lwjgl-nanovg:3.3.3')
+    ['windows', 'windows-arm64', 'linux', 'linux-arm64', 'macos', 'macos-arm64'].each { platform ->
+        implementation include("org.lwjgl:lwjgl-nanovg:3.3.3:natives-${platform}")
+    }
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand version: project.version }
+}
+
+tasks.withType(JavaCompile).configureEach { options.release = 21 }
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+    withSourcesJar()
+}
+test { useJUnitPlatform() }
+jar { from('LICENSE') { rename { "${it}_${project.archives_base_name}" } } }
+
+// Opt-in integration fixture. It is never included in the distributed mod JAR.
+if (project.hasProperty('visualCheck')) {
+    sourceSets {
+        visualCheck {
+            compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+            runtimeClasspath += sourceSets.main.runtimeClasspath
+        }
+    }
+    loom {
+        mods {
+            lyricair { sourceSet sourceSets.main }
+            lyricair_visualcheck { sourceSet sourceSets.visualCheck }
+        }
+        runs {
+            visualCheck {
+                client()
+                source sourceSets.visualCheck
+                runDir '.visual-check-run'
+                programArgs '--quickPlaySingleplayer', 'LyricAirCheck'
+            }
+        }
+    }
+    tasks.named('runVisualCheck') {
+        doFirst {
+            def fixtureConfig = project.file('.visual-check-run/config/lyricair.json')
+            fixtureConfig.parentFile.mkdirs()
+            fixtureConfig.text = '{}'
+        }
+    }
+}
+

@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "dev.lyricair.visualcheck.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": ["SidebarHoverMixin"],
+  "injectors": { "defaultRequire": 1 }
+}

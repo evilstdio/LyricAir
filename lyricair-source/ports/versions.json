@@ -1,0 +1,92 @@
+[
+  {
+    "minecraft": "1.21.2",
+    "loader": "0.19.5",
+    "fabricApi": "0.106.1+1.21.2",
+    "java": 21
+  },
+  {
+    "minecraft": "1.21.3",
+    "loader": "0.19.5",
+    "fabricApi": "0.114.1+1.21.3",
+    "java": 21
+  },
+  {
+    "minecraft": "1.21.4",
+    "loader": "0.19.5",
+    "fabricApi": "0.119.4+1.21.4",
+    "java": 21
+  },
+  {
+    "minecraft": "1.21.5",
+    "loader": "0.19.5",
+    "fabricApi": "0.128.2+1.21.5",
+    "java": 21
+  },
+  {
+    "minecraft": "1.21.6",
+    "loader": "0.19.5",
+    "fabricApi": "0.128.2+1.21.6",
+    "java": 21
+  },
+  {
+    "minecraft": "1.21.7",
+    "loader": "0.19.5",
+    "fabricApi": "0.129.0+1.21.7",
+    "java": 21
+  },
+  {
+    "minecraft": "1.21.8",
+    "loader": "0.19.5",
+    "fabricApi": "0.136.1+1.21.8",
+    "java": 21
+  },
+  {
+    "minecraft": "1.21.9",
+    "loader": "0.19.5",
+    "fabricApi": "0.134.1+1.21.9",
+    "java": 21
+  },
+  {
+    "minecraft": "1.21.10",
+    "loader": "0.19.5",
+    "fabricApi": "0.138.4+1.21.10",
+    "java": 21
+  },
+  {
+    "minecraft": "1.21.11",
+    "loader": "0.19.5",
+    "fabricApi": "0.141.6+1.21.11",
+    "java": 21
+  },
+  {
+    "minecraft": "26.1",
+    "loader": "0.19.5",
+    "fabricApi": "0.145.1+26.1",
+    "java": 25
+  },
+  {
+    "minecraft": "26.1.1",
+    "loader": "0.19.5",
+    "fabricApi": "0.145.4+26.1.1",
+    "java": 25
+  },
+  {
+    "minecraft": "26.1.2",
+    "loader": "0.19.5",
+    "fabricApi": "0.155.3+26.1.2",
+    "java": 25
+  },
+  {
+    "minecraft": "26.2",
+    "loader": "0.19.5",
+    "fabricApi": "0.161.0+26.2",
+    "java": 25
+  },
+  {
+    "minecraft": "26.3",
+    "loader": "0.19.5",
+    "fabricApi": "0.162.0+26.3",
+    "java": 25
+  }
+]

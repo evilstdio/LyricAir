@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "lyricair",
+  "version": "${version}",
+  "name": "LyricAir",
+  "description": "Floating 3D Spotify lyrics, a now-playing overlay, and a customizable in-game UI.",
+  "authors": ["LyricAir"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": { "client": ["dev.lyricair.LyricAirClient"] },
+  "depends": {
+    "fabricloader": ">=0.16.14",
+    "minecraft": "1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
+
